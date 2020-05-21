@@ -6,7 +6,9 @@ connection = pika.BlockingConnection(pika.ConnectionParameters('localhost'))
 channel = connection.channel()
 
 # Declare/create a new queue in RabbitMQ. It will always and only one no matter how many times you declare it.
-channel.queue_declare(queue='hello')
+# The RabbitMQ server will forget all the message if the RabbitMQ server is down. Set durable=True so the RabbitMQ will make sure particular queue in the RabbitMQ will not forget it's message and it will redeliver the message to the worker.py instances.
+# BOTH side MUST declare durable=True.
+channel.queue_declare(queue='hello', durable=True)
 
 
 # Declare message variable, read the first argument given from outside or simply print Hello World
