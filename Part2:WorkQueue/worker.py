@@ -11,7 +11,11 @@ channel = connection.channel()
 # Declare/create a new queue in RabbitMQ. It will always and only one no matter how many times you declare it.
 # The RabbitMQ server will forget all the message if the RabbitMQ server is down. Set durable=True so the RabbitMQ will make sure particular queue in the RabbitMQ will not forget it's message and it will redeliver the message to the worker.py instances.
 # BOTH side MUST declare durable=True.
-channel.queue_declare(queue='hello', durable=True)
+# Commenting this queue declaration because the queue's durable cannot be changed after the queue is created without durable=True for the first time.
+# channel.queue_declare(queue='hello', durable=True)
+
+# We MUST create another queue with durable=True in the FIRST TIME.
+channel.queue_declare(queue='task_queue', durable=True)
 
 # Define a callback function to receive messages from RabbitMQ queues. It has created a timer to simulate the listener is working on something.
 def callback(ch, method, properties, body):
@@ -22,12 +26,25 @@ def callback(ch, method, properties, body):
     # Every message received NEED to create an acknowledgement to tell RabbitMQ that the message has been received so you won't lose any senders'/producers' messages.
     ch.basic_ack(delivery_tag = method.delivery_tag)
 
-# Consume/Receive/Retreive the message from 'hello' queue, with default exchange with auto_ack=true.
+# In basic RabbitMQ, when 2 or more workers are running, the RabbitMQ dispatches the messages to those workers with Round-Robin method.
+# But the RabbitMQ never considered that 1 worker may received too much work while others received only light works.
+# So, quality of service needs to be implemented. When one worker has a task on hand, RabbitMQ shouldn't give it more work and send the task to other free workers.
+# If all workers have tasks on hand, the RabbitMQ will wait until the task has finished and get message acknowledgement from the worker and ready to receive another task.
+# channel.basic_qos(prefetch_count=1) tells RabbitMQ to implement basic QoS, and every worker should only have 1 task on hand.
+channel.basic_qos(prefetch_count=1)
 
+# Consume/Receive/Retreive the message from 'hello' queue, with default exchange with auto_ack=true.
 # auto_ack=true because auto_ack by default is false. When auto_ack=true the RabbitMQ will auto resend the message to other worker.py instance if it found out the worker.py instance it sent to has died.
-channel.basic_consume(queue='hello',
-                      auto_ack=True,
-                      on_message_callback=callback)
+# If you don't mention auto_ack=true, the RabbitMQ expect you to return the acknowledgement of the message by the worker of the queue itself.
+# If the worker don't acknowledge the message, the message in the queue won't get deleted by the RabbitMQ.
+# Reason of manual acknowledgement: If the message given to the worker of the queue fails, the RabbitMQ will attempt to give the message to another worker, instead of losing the message forever.
+# Commenting this consume because we won't use 'hello' queue without durability.
+# channel.basic_consume(queue='hello',
+#                     #   auto_ack=True,
+                      # on_message_callback=callback)
+
+# Start consuming task_queue queue
+channel.basic_consume(queue='task_queue', on_message_callback=callback)
 
 # Indicate the message has been received successfully
 print(' [*] Waiting for messages. To exit press CTRL+C')
